@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geiá sou Athen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Wetterbericht -> Goal: Inform -> Viz/Presentation: Bar Chart (Chart.js) for Temp High/Low, Text for summary, external link -> Interaction: Static display, clickable link -> Justification: Clear visual of temperature range and direct access to live data -> Library: Chart.js.
+        - Report Info: Historische Stätten Tabelle -> Goal: Inform -> Viz/Presentation: HTML Table -> Interaction: Static display -> Justification: Structured overview of site details.
+        - Report Info: Categorized lists (Restaurants, Bars, Sites, History, Shopping) -> Goal: Inform/Organize -> Viz/Presentation: HTML lists/cards with distinct, larger headings, details and Google Maps links -> Interaction: Static display with clickable links -> Justification: Easy browsing of options and direct navigation, improved visual hierarchy and readability.
+        - FEATURE: Athen-Orakel -> Goal: Engage/Inform -> Viz/Presentation: Text input, button, text output -> Interaction: User types question, clicks button, LLM generates answer -> Justification: Adds interactive Q&A about Athenian culture/history. -> Library: Gemini API (gemini-2.0-flash).
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .nav-button.active { background-color: #1A73E8; color: white; } /* Accent Blue for active tab */
+        .nav-button { transition: background-color 0.3s ease, transform 0.2s ease; }
+        .nav-button:hover { transform: translateY(-2px); background-color: #0A4B7D; } /* Primary Blue on hover */
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 350px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; max-height:400px; } }
+        .scroll-smooth { scroll-behavior: smooth; }
+        h2 { margin-top: 1.5rem; margin-bottom: 1rem; font-size: 2.25rem; font-weight: 800; color: #0A4B7D; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); } /* Larger, bolder, primary blue with shadow */
+        h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; font-size: 2rem; font-weight: 800; color: #0A4B7D; border-bottom: 3px solid #1A73E8; padding-bottom: 0.75rem; } /* Larger, bolder, primary blue with thicker underline */
+        h4 { margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.5rem; font-weight: 700; color: #222222; } /* Larger, bolder, dark gray */
+        .card { background-color: white; border-radius: 1.5rem; /* Even more rounded */ box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1), 0 5px 10px -5px rgba(0,0,0,0.04); /* Stronger shadow */ margin-bottom: 2rem; padding: 2rem; } /* More padding and margin */
+        .tag { background-color: #1A73E8; color: white; padding: 0.3rem 0.6rem; border-radius: 0.375rem; font-size: 0.75rem; margin-right: 0.5rem; font-weight: 600; } /* Accent blue tag */
+        a { color: #1A73E8; text-decoration: none; font-weight: 500; } /* Accent blue links, slightly bolder */
+        a:hover { text-decoration: underline; color: #0A4B7D; } /* Primary blue on hover */
+        .llm-response { background-color: #e0f2fe; border-left: 4px solid #1A73E8; padding: 1.5rem; border-radius: 0.75rem; margin-top: 1.5rem; color: #222222; } /* Lighter blue background, accent blue border, more padding/rounded */
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1A73E8; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 0.5rem; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .flag-background {
+            background-image: linear-gradient(to right, #0A4B7D 0%, #0A4B7D 33%, #FFFFFF 33%, #FFFFFF 66%, #0A4B7D 66%, #0A4B7D 100%);
+            background-size: 100% 100%;
+        }
+        @media (min-width: 768px) {
+            .flag-background {
+                background-image: linear-gradient(to right, #0A4B7D 0%, #0A4B7D 25%, #FFFFFF 25%, #FFFFFF 75%, #0A4B7D 75%, #0A4B7D 100%);
+            }
+        }
+        .section-intro-text { font-size: 1.125rem; line-height: 1.75rem; margin-bottom: 1.5rem; } /* Paragraph after h3 */
+    </style>
+</head>
+<body class="bg-gray-50 text-neutral-800 scroll-smooth">
+    <header class="bg-[#0A4B7D] text-white p-6 shadow-xl relative overflow-hidden">
+        <div class="absolute inset-0 flag-background opacity-10"></div>
+        <div class="container mx-auto text-center relative z-10">
+            <h1 class="text-4xl sm:text-5xl font-extrabold tracking-wide">🇬🇷 Geiá sou Athen 🏛️</h1>
+            <p class="text-lg sm:text-xl mt-2">29. Mai – 1. Juni 2025</p>
+        </div>
+    </header>
+
+    <nav class="bg-[#0A4B7D] p-3 sticky top-0 z-50 shadow-lg">
+        <div class="container mx-auto flex flex-wrap justify-center space-x-2 sm:space-x-3">
+            <button class="nav-button active text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('startseite')">ℹ️ Startseite & Tipps</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('entdeckungen')">✨ Entdeckungen & Kultur</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('geschichte')">📜 Geschichte Athens</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('historisch')">🏛️ Historisches Erbe</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('hotel')">🏨 Hotel & Umgebung</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('kulinarik')">🍽️ Kulinarik & Nachtleben</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('orakel')">🔮 Athen-Orakel</button>
+            <button class="nav-button text-sm sm:text-base px-4 py-2 rounded-lg font-medium text-white hover:bg-[#1A73E8]" onclick="openTab('shopping')">🛍️ Shopping</button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 sm:p-6">
+        <div id="startseite" class="tab-content active">
+            <h2>Willkommen in der Wiege der Zivilisation!</h2>
+            <p class="mb-4 section-intro-text">Athen, eine Stadt, in der antike Geschichte inmitten eines pulsierenden modernen Lebens atmet, bietet eine unvergleichliche Reise. Dieser interaktive Plan hilft Ihnen, Ihr Abenteuer optimal zu gestalten. Entdecken Sie ikonische historische Stätten, authentische lokale Erlebnisse und kulinarische Genüsse.</p>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3>Wesentliche Planung und praktische Tipps</h3>
+                    <p class="mb-3 section-intro-text">Ihre Reise fällt in die Sommersaison Athens, was längere Öffnungszeiten für archäologische Stätten und Museen bedeutet. Das Wetter ist im Allgemeinen angenehm, aber die Temperaturen können steigen, weshalb eine strategische Planung für Outdoor-Aktivitäten von entscheidender Bedeutung ist.</p>
+                    
+                    <h4>Ticketstrategien: Das Athener Abenteuer maximieren</h4>
+                    <p class="mb-2">Für Ihren viertägigen Aufenthalt wird das <a href="https://www.google.com/search?q=Akropolis+Kombiticket+Athen+kaufen" target="_blank" class="font-bold">Kombiticket für 30 €</a> dringend empfohlen. Es gewährt einmaligen Zugang zu sieben großen archäologischen Stätten (Akropolis, Antike Agora, Römische Agora, Tempel des Olympischen Zeus, Kerameikos, Hadriansbibliothek, Lykeion des Aristoteles) und ist fünf Tage lang gültig. Dies spart Kosten und vor allem Zeit, da Sie Warteschlangen umgehen können.</p>
+                    <p class="mb-2">Für die Akropolis und das Akropolismuseum empfiehlt es sich, Tickets online im Voraus zu kaufen, um lange Warteschlangen zu überspringen. Nutzen Sie für die Akropolis den weniger überfüllten Seiteneingang an der südöstlichen Ecke.</p>
+
+                    <h4>Allgemeine Ratschläge für eine reibungslose Reise</h4>
+                    <ul class="list-disc list-inside mb-2 ml-4">
+                        <li><strong>Schuhwerk:</strong> Bequeme Wanderschuhe sind unerlässlich.</li>
+                        <li><strong>Hydration:</strong> Ausreichend Flüssigkeit zu sich nehmen, eine wiederverwendbare Wasserflasche mitführen.</li>
+                        <li><strong>Zeitplanung:</strong> Besuche von Outdoor-Stätten am frühen Morgen oder späten Nachmittag/Abend planen, um Hitze und Menschenmassen zu vermeiden.</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3>Wetterbericht für Athen (29. Mai – 1. Juni 2025)</h3>
+                    <p class="mb-3 section-intro-text">Hier ist die aktuelle Wettervorhersage für Ihren Aufenthalt. Packen Sie entsprechend, um für alle Bedingungen gewappnet zu sein. <a href="https://www.google.com/search?q=wetter+athen+aktuell" target="_blank">Aktuelles Wetter in Athen ansehen</a></p>
+                    <div class="chart-container bg-white p-4 rounded-lg shadow">
+                        <canvas id="weatherChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-sm">
+                        <p><strong>Do, 29. Mai:</strong> Tag 26.7°C, Nacht 15°C. Überwiegend bewölkt. Wind: ~10 km/h.</p>
+                        <p><strong>Fr, 30. Mai:</strong> Tag 23.9°C, Nacht 16.7°C. Vereinzelte Gewitter (45% Regen, ~3.6mm). Wind: ~22.5 km/h.</p>
+                        <p><strong>Sa, 31. Mai:</strong> Tag 23.9°C, Nacht 17.8°C. Frühe Gewitter möglich (16% Regen, ~0.25mm). Wind: ~32 km/h.</p>
+                        <p><strong>So, 1. Juni:</strong> Tag 26.7°C, Nacht 16.1°C. Sonnig. Wind: ~22.5 km/h.</p>
+                        <p class="mt-2"><em>Hinweis: Packen Sie leichte Kleidung und einen Regenschutz ein.</em></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-6">
+                <h3>Wichtige historische Stätten – Öffnungszeiten & Tickets</h3>
+                <p class="mb-3 section-intro-text">Diese Tabelle fasst wichtige praktische Informationen für die Planung Ihrer Besuche zusammen und hebt die Vorteile des Kombitickets hervor.</p>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stätte</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Öffnungszeiten (Mai 2025)</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eintritt (€)</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kombiticket?</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                            <tr><td class="px-4 py-2">Akropolis</td><td class="px-4 py-2">8:00–20:00</td><td class="px-4 py-2">20</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Akropolismuseum</td><td class="px-4 py-2">Mo 9-17; Di-So 9-20; Fr 9-22</td><td class="px-4 py-2">20</td><td class="px-4 py-2">Nein</td></tr>
+                            <tr><td class="px-4 py-2">Antike Agora</td><td class="px-4 py-2">8:00–17:00</td><td class="px-4 py-2">10</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Römische Agora</td><td class="px-4 py-2">8:00–19:30</td><td class="px-4 py-2">6</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Tempel des Olymp. Zeus</td><td class="px-4 py-2">8:00–19:30</td><td class="px-4 py-2">6</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Panathenäisches Stadion</td><td class="px-4 py-2">8:00–19:00</td><td class="px-4 py-2">10</td><td class="px-4 py-2">Nein</td></tr>
+                            <tr><td class="px-4 py-2">Hadriansbibliothek</td><td class="px-4 py-2">8:00–20:00</td><td class="px-4 py-2">N/A</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Lykeion des Aristoteles</td><td class="px-4 py-2">8:00–20:00</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Ja</td></tr>
+                            <tr><td class="px-4 py-2">Nat. Archäolog. Museum</td><td class="px-4 py-2">Di 13-20; Mi-Mo 8-20</td><td class="px-4 py-2">12</td><td class="px-4 py-2">Nein</td></tr>
+                            <tr><td class="px-4 py-2">Kotsanas Museum</td><td class="px-4 py-2">9:00–17:00</td><td class="px-4 py-2">5</td><td class="px-4 py-2">Nein</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="entdeckungen" class="tab-content">
+            <h2>Entdeckungen & Kultur in Athen</h2>
+            <p class="mb-4 section-intro-text">Abseits der Hauptpfade gibt es in Athen viel zu entdecken: von charmanten Geheimtipps und einzigartigen Museen bis hin zu besonderen kulturellen Veranstaltungen und atemberaubenden Aussichtspunkten. Lassen Sie sich von der Vielfalt der Stadt überraschen!</p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3>Geheimtipps & Einzigartige Attraktionen</h3>
+                    <p class="mb-3 section-intro-text">Entdecken Sie verborgene Schätze und Attraktionen, die Sie nur in Athen finden.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Anafiotika" target="_blank"><strong>Anafiotika:</strong></a> Ein charmantes Viertel direkt unterhalb des Akropolis-Felsens, das sich wie ein kykladisches Inseldorf anfühlt. Seine weiß getünnten Häuser und handgepflasterten Wege bieten eine friedliche Flucht vom Touristenrummel.</li>
+                        <li><a href="https://www.google.com/maps/place/Panathenaic+Stadium" target="_blank"><strong>Panathenäisches Stadion:</strong></a> Das einzige Stadion der Welt, das vollständig aus Marmor gebaut wurde. Es war der Austragungsort der ersten modernen Olympischen Spiele im Jahr 1896.</li>
+                        <li><a href="https://www.google.com/maps/place/Kotsanas+Museum+of+Ancient+Greek+Technology" target="_blank"><strong>Kotsanas Museum für antike griechische Technologie:</strong></a> Ein einzigartiges Museum mit über 100 interaktiven Exponaten von Hightech-Erfindungen der alten Griechen, das ihren Einfallsreichtum zeigt.</li>
+                        <li><a href="https://www.google.com/maps/place/Philopappos+Hill" target="_blank"><strong>Filopappos-Hügel:</strong></a> Bietet atemberaubende Panoramablicke auf die Akropolis und die Stadt, besonders schön zum Sonnenuntergang. Der Eintritt ist kostenlos.</li>
+                    </ul>
+                </div>
+                 <div class="card">
+                    <h3>Hipster-Viertel & Lokales Flair</h3>
+                    <p class="mb-3 section-intro-text">Entdecken Sie die trendigen Viertel Athens, die eine Mischung aus Tradition, Kunst und authentischem lokalen Leben bieten.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Koukaki" target="_blank"><strong>Koukaki:</strong></a> Ein charmantes Viertel im Schatten der Akropolis mit einer perfekten Mischung aus traditionellem Athener Leben und zeitgenössischer kreativer Energie, bekannt für Street Art und Cafés.</li>
+                        <li><a href="https://www.google.com/maps/place/Psirri" target="_blank"><strong>Psirri & Gazi:</strong></a> Hippe Innenstadtviertel mit einer kuratierten Street-Art-Szene und lebhaftem Nachtleben. Psirri ist auch Heimat von Ta Karamanlidika Tou Fani.</li>
+                        <li><a href="https://www.google.com/maps/place/Pangrati" target="_blank"><strong>Pangrati:</strong></a> Ein Kulturzentrum, das alten Charme mit modernem künstlerischen Flair verbindet, mit Museen und lokalen Tavernen.</li>
+                        <li><a href="https://www.google.com/maps/place/Exarcheia" target="_blank"><strong>Exarchia:</strong></a> Bekannt als "Alternatives Athen", bietet es eine Mischung aus politischen Identitäten, authentischen Restaurants und spektakulären Stadtblicken vom Strefi-Hügel.</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card mt-6">
+                <h3>Besondere Ausstellungen & Events (29. Mai – 1. Juni 2025)</h3>
+                 <p class="mb-3 section-intro-text">Prüfen Sie die genauen Termine und Verfügbarkeiten, da sich Programme kurzfristig ändern können. Ein Besuch dieser Events kann Ihre Reise kulturell bereichern.</p>
+                <ul class="space-y-2 ml-4">
+                    <li><a href="https://www.snfcc.org/en/" target="_blank"><strong>Stavros Niarchos Foundation Cultural Center (SNFCC):</strong></a>
+                        <ul class="list-disc list-inside ml-4">
+                            <li>Ausstellungen: "Simone Leigh: Anatomy of Architecture", "WOW Athens 2025", "100 Years Takis", "Marilena Grispou | SAFE SPACE", "Claudia Wieser: Surroundings".</li>
+                            <li>Tägliche Sport- & Wellness-Aktivitäten, "Dancing Fountains at the Canal".</li>
+                        </ul>
+                    </li>
+                    <li><a href="https://www.aefestival.gr/odeion-herodes-atticus/" target="_blank"><strong>Odeon des Herodes Atticus:</strong></a> Oper "Turandot" (Premiere 1. Juni 2025).</li>
+                    <li><a href="https://www.nationalopera.gr/en/" target="_blank"><strong>Griechische Nationaloper (GNO) im Stavros Niarchos Hall:</strong></a> Ballett "The Golden Age", Oper "The Fall of the House of Commons".</li>
+                </ul>
+            </div>
+
+            <div class="card mt-6">
+                 <h3>Beste Aussichtspunkte</h3>
+                 <p class="mb-3 section-intro-text">Erleben Sie Athen aus verschiedenen Perspektiven und genießen Sie unvergessliche Ausblicke, besonders zu Sonnenaufgang oder Sonnenuntergang.</p>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div><strong>Sonnenaufgang & Stadtüberblick:</strong> <a href="https://www.google.com/maps/place/Mount+Lycabettus" target="_blank">Lykabettus-Hügel</a>, <a href="https://www.google.com/maps/place/Strefi+Hill" target="_blank">Strefi-Hügel</a>.</div>
+                    <div><strong>Sonnenuntergang:</strong> <a href="https://www.google.com/maps/place/Philopappos+Hill" target="_blank">Filopappos-Hügel</a>, <a href="https://www.google.com/maps/place/Areopagus" target="_blank">Areopag-Hügel (Mars Hill)</a>, Rooftop-Bars (<a href="https://www.google.com/maps/place/Kuzina" target="_blank">Kuzina</a>, <a href="https://www.google.com/maps/place/360+Cocktail+Bar" target="_blank">360° Cocktail Bar</a>).</div>
+                    <div><strong>Hafenblick:</strong> <a href="https://www.snfcc.org/en/" target="_blank">Stavros Niarchos Foundation Cultural Center (SNFCC)</a>.</div>
+                    <div><strong>Nachtansichten:</strong> <a href="https://www.google.com/maps/place/National+Observatory+of+Athens" target="_blank">Nationales Observatorium von Athen (Hill of the Nymphs)</a>.</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="geschichte" class="tab-content">
+            <h2>Die Geschichte Athens</h2>
+            <p class="mb-4 section-intro-text">Athen blickt auf eine über 3.400 Jahre alte Geschichte zurück und ist eine der ältesten ununterbrochen bewohnten Städte der Welt. Sie war das Zentrum der klassischen griechischen Zivilisation und die Wiege der Demokratie.</p>
+
+            <div class="card">
+                <h3>Von der Antike bis zur Neuzeit: Eine Chronologie</h3>
+                <ul class="space-y-6">
+                    <li>
+                        <h4>Frühgeschichte & Mykenische Zeit (ca. 3000–1100 v. Chr.)</h4>
+                        <p class="section-intro-text">Die ersten Spuren menschlicher Besiedlung in Athen reichen bis in die Jungsteinzeit zurück, was die Region zu einem der ältesten dauerhaft bewohnten Gebiete Europas macht. Bereits in der Mykenischen Zeit (ca. 1600–1100 v. Chr.) diente die Akropolis als befestigte Königsresidenz. Athen entwickelte sich zu einem wichtigen Zentrum der Mykenischen Zivilisation, auch wenn es nicht die gleiche Bedeutung wie die großen Palastzentren Mykene oder Tiryns erlangte. Archäologische Funde deuten auf eine wohlhabende und organisierte Gesellschaft hin.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Die Akropolis war ursprünglich eine Festung und ein Palastkomplex, lange bevor sie zu einem religiösen Zentrum wurde. Die Mykener bauten hier bereits massive Mauern und ein komplexes Tunnelsystem zur Wasserversorgung.</p>
+                    </li>
+                    <li>
+                        <h4>Archaik (ca. 800–500 v. Chr.)</h4>
+                        <p class="section-intro-text">In dieser Periode erlebte Athen eine tiefgreifende politische und soziale Transformation. Unter Gesetzgebern wie <a href="https://de.wikipedia.org/wiki/Solon" target="_blank">Solon</a> (ca. 630–560 v. Chr.) wurden wichtige Reformen eingeleitet, die die Grundlagen für die spätere Demokratie legten, indem sie die Macht der Aristokratie einschränkten und die Rechte der Bürger erweiterten. Seine Reformen umfassten die Abschaffung der Schuldsklaverei und die Einführung eines Gerichtswesens, das allen Bürgern offenstand. <a href="https://de.wikipedia.org/wiki/Kleisthenes_(Athen)" target="_blank">Kleisthenes</a> führte um 508 v. Chr. weitere demokratische Reformen ein, die das Bürgersystem neu organisierten und die Grundlage für die attische Demokratie schufen, indem er die Bürger in zehn Phylen einteilte, um alte Stammesbindungen aufzubrechen. Dies war der Beginn der kulturellen Blütezeit Athens, mit ersten Entwicklungen in Literatur, Kunst und Architektur.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Die Einführung der "Ostracism" (<a href="https://de.wikipedia.org/wiki/Scherbengericht" target="_blank">Scherbengericht</a>) durch Kleisthenes ermöglichte es den Athenern, Bürger, die als Bedrohung für die Demokratie angesehen wurden, für zehn Jahre zu verbannen.</p>
+                    </li>
+                    <li>
+                        <h4>Klassik (ca. 500–323 v. Chr.)</h4>
+                        <p class="section-intro-text">Dies war das "Goldene Zeitalter" Athens, insbesondere unter der Führung von <a href="https://de.wikipedia.org/wiki/Perikles" target="_blank">Perikles</a> im 5. Jahrhundert v. Chr. Nach den entscheidenden Siegen über die Perser in den <a href="https://de.wikipedia.org/wiki/Perserkriege" target="_blank">Perserkriegen</a> (z.B. Schlacht bei <a href="https://de.wikipedia.org/wiki/Schlacht_bei_Marathon" target="_blank">Marathon</a> 490 v. Chr., <a href="https://de.wikipedia.org/wiki/Seeschlacht_von_Salamis" target="_blank">Salamis</a> 480 v. Chr.) stieg Athen zur führenden Seemacht und zum unangefochtenen kulturellen Zentrum der griechischen Welt auf. In dieser Zeit entstanden ikonische Bauwerke wie der majestätische <a href="https://de.wikipedia.org/wiki/Parthenon" target="_blank">Parthenon</a> auf der Akropolis, die <a href="https://de.wikipedia.org/wiki/Propyl%C3%A4en_(Athen)" target="_blank">Propyläen</a> und das <a href="https://de.wikipedia.org/wiki/Erechtheion" target="_blank">Erechtheion</a>. Philosophen wie <a href="https://de.wikipedia.org/wiki/Sokrates" target="_blank">Sokrates</a>, <a href="https://de.wikipedia.org/wiki/Platon" target="_blank">Platon</a> und <a href="https://de.wikipedia.org/wiki/Aristoteles" target="_blank">Aristoteles</a> prägten das Denken der westlichen Welt, und das Theater mit Dramatikern wie <a href="https://de.wikipedia.org/wiki/Aischylos" target="_blank">Aischylos</a>, <a href="https://de.wikipedia.org/wiki/Sophokles" target="_blank">Sophokles</a> und <a href="https://de.wikipedia.org/wiki/Euripides" target="_blank">Euripides</a> erreichte seinen Höhepunkt. Die attische Demokratie, ein einzigartiges politisches System, war ein Vorbild für viele nachfolgende politische Systeme, auch wenn sie nur für männliche Bürger galt.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Der Parthenon wurde ohne eine einzige gerade Linie gebaut; alle Linien sind leicht gekrümmt, um optische Illusionen zu korrigieren und das Gebäude perfekt erscheinen zu lassen. Dies wird als "<a href="https://de.wikipedia.org/wiki/Entasis" target="_blank">Entasis</a>" bezeichnet.</p>
+                    </li>
+                    <li>
+                        <h4>Hellenismus (ca. 323–146 v. Chr.)</h4>
+                        <p class="section-intro-text">Nach dem Tod <a href="https://de.wikipedia.org/wiki/Alexander_der_Gro%C3%9Fe" target="_blank">Alexanders des Großen</a> verlor Athen seine politische Vormachtstellung an die hellenistischen Königreiche, die aus Alexanders Reich hervorgingen. Dennoch blieb die Stadt ein bedeutendes intellektuelles und kulturelles Zentrum, insbesondere für Philosophie (mit den Schulen der <a href="https://de.wikipedia.org/wiki/Stoa" target="_blank">Stoiker</a>, <a href="https://de.wikipedia.org/wiki/Epikureismus" target="_blank">Epikureer</a> und <a href="https://de.wikipedia.org/wiki/Skeptizismus" target="_blank">Skeptiker</a>) und Rhetorik. Viele römische Aristokraten und Intellektuelle studierten in Athen, was ihren anhaltenden Einfluss unterstreicht. Die Stadt war weiterhin ein Magnet für Gelehrte und Künstler aus der gesamten hellenistischen Welt.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Während dieser Zeit wurde die <a href="https://de.wikipedia.org/wiki/Stoa_Poikile" target="_blank">Stoa Poikile</a> (Bemalte Säulenhalle) in der Agora zum Treffpunkt der Stoiker-Philosophen, deren Name sich von diesem Ort ableitet. <a href="https://de.wikipedia.org/wiki/Zenon_von_Kition" target="_blank">Zenon von Kition</a> lehrte hier seine Philosophie.</p>
+                    </li>
+                    <li>
+                        <h4>Römerzeit (146 v. Chr. – 330 n. Chr.)</h4>
+                        <p class="section-intro-text">Nach der Eroberung Griechenlands wurde Athen Teil des <a href="https://de.wikipedia.org/wiki/R%C3%B6misches_Reich" target="_blank">Römischen Reiches</a>. Die Stadt genoss jedoch als kulturelles und philosophisches Zentrum weiterhin eine privilegierte Stellung und wurde von vielen römischen Kaisern bewundert. Kaiser <a href="https://de.wikipedia.org/wiki/Hadrian" target="_blank">Hadrian</a> war ein großer Bewunderer Athens und förderte die Stadt mit neuen Bauwerken, darunter die <a href="https://de.wikipedia.org/wiki/Hadriansbibliothek" target="_blank">Hadriansbibliothek</a> und der massive <a href="https://de.wikipedia.org/wiki/Tempel_des_Olympischen_Zeus_(Athen)" target="_blank">Tempel des Olympischen Zeus</a>. Trotz des römischen Einflusses bewahrte Athen seine griechische Identität und Sprache, und viele römische Eliten schickten ihre Söhne nach Athen, um dort zu studieren.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Kaiser Hadrian ließ den <a href="https://de.wikipedia.org/wiki/Hadriansbogen_(Athen)" target="_blank">Hadriansbogen</a> errichten, der die antike griechische Stadt symbolisch von der neuen römischen Stadt trennte, obwohl die beiden Bereiche fließend ineinander übergingen.</p>
+                    </li>
+                    <li>
+                        <h4>Byzantinische Zeit (330–1453 n. Chr.)</h4>
+                        <p class="section-intro-text">Mit der Teilung des Römischen Reiches und der Gründung <a href="https://de.wikipedia.org/wiki/Konstantinopel" target="_blank">Konstantinopels</a> als neue Hauptstadt wurde Athen Teil des <a href="https://de.wikipedia.org/wiki/Byzantinisches_Reich" target="_blank">Byzantinischen (Oströmischen) Reiches</a>. Das Christentum wurde zur Staatsreligion, und viele antike Tempel wurden zu Kirchen umgewandelt, darunter der Parthenon, der zur Kirche der Jungfrau Maria umfunktioniert wurde. Die Stadt verlor an politischer und wirtschaftlicher Bedeutung und schrumpfte, blieb aber ein wichtiger Bischofssitz und ein Zentrum für christliche Gelehrsamkeit. Die byzantinische Kunst und Architektur hinterließen ihre Spuren in der Stadt, insbesondere in Form kleinerer Kirchen.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Im 6. Jahrhundert schloss Kaiser <a href="https://de.wikipedia.org/wiki/Justinian_I." target="_blank">Justinian</a> die Philosophieschulen in Athen, was oft als Ende der antiken Philosophie angesehen wird und den Übergang zu einer stärker christlich geprägten Gelehrsamkeit markierte.</p>
+                    </li>
+                    <li>
+                        <h4>Osmanische Herrschaft (1453–1821)</h4>
+                        <p class="section-intro-text">Nach der Eroberung Konstantinopels durch die <a href="https://de.wikipedia.org/wiki/Osmanisches_Reich" target="_blank">Osmanen</a> im Jahr 1453 geriet Athen unter osmanische Kontrolle. Die Stadt verlor weiter an Bedeutung und wurde zu einer kleinen Provinzstadt innerhalb des Osmanischen Reiches. Viele antike Monumente wurden beschädigt oder für Baumaterialien verwendet, und der Parthenon wurde sogar als Moschee und später als Pulvermagazin genutzt, was zu seiner teilweisen Zerstörung durch eine venezianische Kanonenkugel im Jahr 1687 führte. Trotz der Unterdrückung bewahrte die griechische Bevölkerung ihre kulturelle und religiöse Identität, oft im Verborgenen, und es gab immer wieder Aufstände gegen die osmanische Herrschaft.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Während der osmanischen Zeit wurde die Akropolis zu einer Garnison und war nicht mehr frei zugänglich. Die Zerstörung des Parthenon im Jahr 1687 ist ein tragisches Beispiel für die Auswirkungen militärischer Konflikte auf antike Monumente.</p>
+                    </li>
+                    <li>
+                        <h4>Moderne Geschichte (ab 1821)</h4>
+                        <p class="section-intro-text">Nach dem <a href="https://de.wikipedia.org/wiki/Griechische_Revolution" target="_blank">Griechischen Unabhängigkeitskrieg</a> (1821-1829) und der Gründung des modernen griechischen Staates wurde Athen 1834 zur Hauptstadt erklärt. Die Stadt erlebte einen raschen Wiederaufbau und eine Expansion, wobei viele neoklassizistische Gebäude errichtet wurden, um das antike Erbe zu ehren. Ein Höhepunkt war die Ausrichtung der ersten modernen <a href="https://de.wikipedia.org/wiki/Olympische_Spiele_1896" target="_blank">Olympischen Spiele</a> im Jahr 1896, die Athen wieder auf die Weltbühne brachten und das <a href="https://de.wikipedia.org/wiki/Panathen%C3%A4isches_Stadion" target="_blank">Panathenäische Stadion</a> wiederbelebten. Im 20. Jahrhundert erlebte die Stadt weiteres Wachstum, Urbanisierung und moderne Entwicklungen, auch wenn sie mit Herausforderungen wie dem Zweiten Weltkrieg, dem Bürgerkrieg und der Wirtschaftskrise konfrontiert war. Heute ist Athen eine pulsierende europäische Metropole, die ihre reiche Vergangenheit mit einer dynamischen Gegenwart verbindet und ein wichtiges Zentrum für Kultur, Wirtschaft und Tourismus ist.</p>
+                        <p class="text-sm text-gray-600 mt-2"><em>Interessanter Fakt:</em> Die <a href="https://de.wikipedia.org/wiki/Nationale_und_Kapodistrias-Universit%C3%A4t_Athen" target="_blank">Athener Universität</a>, die 1837 gegründet wurde, war die erste Universität im neu gegründeten griechischen Staat und spielte eine entscheidende Rolle bei der Wiederbelebung des griechischen Bildungswesens und der nationalen Identität.</p>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="historisch" class="tab-content">
+            <h2>Historisches Erbe Athens</h2>
+            <p class="mb-4 section-intro-text">Athen ist eine Schatztruhe antiker Wunder. Dieser Abschnitt führt Sie zu den bedeutendsten historischen Stätten und Orten, an denen die griechische Mythologie lebendig wird. Planen Sie Ihre Besuche weise, um das Beste aus diesen zeitlosen Orten herauszuholen.</p>
+
+            <div class="card">
+                <h3>Historisch Relevantes</h3>
+                <p class="mb-3 section-intro-text">Entdecken Sie die wichtigsten archäologischen Stätten, die die Wiege der westlichen Zivilisation prägten.</p>
+                <ul class="space-y-3">
+                    <li><a href="https://www.google.com/maps/place/Acropolis+of+Athens" target="_blank"><strong>Akropolis von Athen:</strong></a> Die antike Zitadelle mit Parthenon, Propyläen, Erechtheion und Tempel der Athena Nike. <em>Beste Besuchszeit: Früh morgens (ab 8:00 Uhr) oder spät abends.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Acropolis+Museum" target="_blank"><strong>Akropolismuseum:</strong></a> Über 4.000 Artefakte von der Akropolis. <em>Beste Besuchszeit: Wochentags morgens oder spät nachmittags; Fr bis 22:00 Uhr.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Ancient+Agora+of+Athens" target="_blank"><strong>Antike Agora von Athen:</strong></a> Geburtsort der Demokratie, mit Hephaistos-Tempel und Stoa des Attalos. <em>Beste Besuchszeit: Früh morgens oder spät nachmittags.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Roman+Agora" target="_blank"><strong>Römische Agora von Athen:</strong></a> Mit dem Turm der Winde. <em>Beste Besuchszeit: Früh morgens oder spät nachmittags.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Temple+of+Olympian+Zeus" target="_blank"><strong>Tempel des Olympischen Zeus:</strong></a> Massiver Tempel für Zeus, daneben der Hadrianbogen. <em>Beste Besuchszeit: Früh morgens (ab 8:00 Uhr) oder spät abends.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Panathenaic+Stadium" target="_blank"><strong>Panathenäisches Stadion:</strong></a> Einziges Stadion der Welt komplett aus Marmor, Ort der ersten modernen Olympischen Spiele. <em>Beste Besuchszeit: Morgens oder spät nachmittags.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Hadrian's+Library" target="_blank"><strong>Hadriansbibliothek:</strong></a> Monumentale Bibliothek von Kaiser Hadrian. <em>Beste Besuchszeit: Früh morgens oder spät nachmittags.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Lyceum+of+Aristotle" target="_blank"><strong>Lykeion des Aristoteles:</strong></a> Archäologische Stätte, wo Aristoteles lehrte. <em>Beste Besuchszeit: Früh morgens oder spät nachmittags.</em></li>
+                    <li><a href="https://www.google.com/maps/place/National+Archaeological+Museum" target="_blank"><strong>Nationales Archäologisches Museum:</strong></a> Größtes Museum Griechenlands mit umfangreicher Sammlung. <em>Beste Besuchszeit: Spät nachmittags oder abends.</em></li>
+                    <li><a href="https://www.google.com/maps/place/Tomb+of+the+Unknown+Soldier" target="_blank"><strong>Wachablösung am Syntagma-Platz:</strong></a> Zeremonie am Grab des unbekannten Soldaten. <em>Beste Besuchszeit: Sonntag 11:00 Uhr für die große Zeremonie.</em></li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Griechische Mythologie Erleben</h3>
+                <p class="mb-3 section-intro-text">Tauchen Sie tief in die faszinierende Welt der griechischen Götter und Helden ein, indem Sie Orte besuchen, die eng mit ihren Geschichten verbunden sind, oder spezielle Ausstellungen erkunden.</p>
+                <ul class="space-y-3">
+                    <li><strong>Antike Stätten:</strong> Akropolis (<a href="https://de.wikipedia.org/wiki/Athene" target="_blank">Athene</a>, <a href="https://de.wikipedia.org/wiki/Zeus" target="_blank">Zeus</a>, <a href="https://de.wikipedia.org/wiki/Poseidon" target="_blank">Poseidon</a>), Tempel des Olympischen Zeus (<a href="https://de.wikipedia.org/wiki/Zeus" target="_blank">Zeus</a>), Antike Agora (<a href="https://de.wikipedia.org/wiki/Hephaistos" target="_blank">Hephaistos</a>, <a href="https://de.wikipedia.org/wiki/Athene" target="_blank">Athene</a>, <a href="https://de.wikipedia.org/wiki/Theseus" target="_blank">Theseus</a>).</li>
+                    <li><strong>Museen:</strong> Akropolismuseum, Nationales Archäologisches Museum, <a href="https://www.google.com/maps/place/Museum+of+Cycladic+Art" target="_blank">Museum für Kykladische Kunst</a> (zeigen Artefakte mit mythologischen Darstellungen).</li>
+                    <li><strong>Spezielle Ausstellungen/Touren:</strong> "Ancient Greece: The Exhibition" (<a href="https://www.google.com/maps/place/Goudi+Olympic+Center" target="_blank">Goudi Olympic Center</a>), geführte Mythologie-Touren durch Athen.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="hotel" class="tab-content">
+            <h2>Hotel Enattica Suites & Umgebung</h2>
+            <p class="mb-4 section-intro-text">Ihr Hotel, die Enattica Suites, befindet sich in der Klitiou Street 5, Monastiraki – eine ausgezeichnete, zentrale Lage für Erkundungen. Hier finden Sie Empfehlungen für Restaurants, Bars und Fitnessstudios in unmittelbarer Nähe, die bei Einheimischen beliebt sind.</p>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card">
+                    <h3>Restaurants (beliebt bei Einheimischen)</h3>
+                    <p class="mb-3 section-intro-text">Entdecken Sie authentische griechische Küche und lokale Favoriten in der Nähe Ihres Hotels.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Karamanlidika+tou+Fani" target="_blank"><strong>Ta Karamanlidika Tou Fani:</strong></a> Anatolische Spezialitäten, Wurstwaren (Monastiraki/Psirri).</li>
+                        <li><a href="https://www.google.com/maps/place/O+Thanasis" target="_blank"><strong>O Thanasis:</strong></a> Köstliche Gyros und Souvlaki (Monastiraki).</li>
+                        <li><a href="https://www.google.com/maps/place/Geros+tou+Moria" target="_blank"><strong>Geros Tou Moria:</strong></a> Traditionelle Taverne, Moussaka, Lamm, Live-Musik (Plaka).</li>
+                        <li><a href="https://www.google.com/maps/place/Grande+Dame+Athenian+Tavern" target="_blank"><strong>Grande Dame Athenian Tavern:</strong></a> Moderne griechische Küche, stilvoll (Nikis Str.).</li>
+                        <li><a href="https://www.google.com/maps/place/Kiouzin" target="_blank"><strong>Kiouzin:</strong></a> Griechische Rezepte modern interpretiert (Kolonaki).</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Bars/Lokale in der Nähe</h3>
+                    <p class="mb-3 section-intro-text">Genießen Sie das Athener Nachtleben in authentischen Bars, die bei Einheimischen beliebt sind.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Baba+Au+Rum" target="_blank"><strong>Baba Au Rum</strong></a> (Monastiraki): Top Cocktailbar, Pionier der Athener Cocktailszene, bekannt für Rum-Spezialitäten.</li>
+                        <li><a href="https://www.google.com/maps/place/six+d.o.g.s." target="_blank"><strong>six d.o.g.s.</strong></a> (Monastiraki): Vielseitiges Kulturzentrum mit Bar, Club, Café und Garten, beliebt bei Einheimischen.</li>
+                        <li><a href="https://www.google.com/maps/place/Juan+Rodriguez+Bar" target="_blank"><strong>Juan Rodriguez Bar</strong></a> (Psirri): Ganztägig geöffnete Bar mit umfangreicher, preisgünstiger Craft-Cocktailkarte und lateinamerikanischem Flair.</li>
+                        <li><a href="https://www.google.com/maps/place/Blue+Bird+Bar" target="_blank"><strong>Blue Bird</strong></a> (Historisches Zentrum): Beliebter Treffpunkt in der Ipitou Straße, besonders am Wochenende mit Straßenparty-Atmosphäre.</li>
+                        <li><a href="https://www.google.com/maps/place/Gypsy+Jungle" target="_blank"><strong>Gypsy Jungle</strong></a> (Monastiraki, Agia Eirini Platz): Eine kleine Oase mit Boho-Vibes und kreativen Cocktails, fast versteckt im funky Viertel.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Fitnessstudios (Gyms)</h3>
+                    <p class="mb-3 section-intro-text">Bleiben Sie auch auf Reisen fit! Hier sind einige Fitnessstudios in der Nähe Ihres Hotels.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Holmes+Place+Athens" target="_blank"><strong>Holmes Place Athens:</strong></a> Zentral im CITY LINK Einkaufszentrum gelegen, sehr gut erreichbar.</li>
+                        <li><a href="https://www.google.com/maps/place/FAST+FITNESS+MIHA+BODYTEC" target="_blank"><strong>FAST FITNESS MIHA BODYTEC:</strong></a> In der Ymittou Street in Pagrati, bietet EMS-Training.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="kulinarik" class="tab-content">
+            <h2>Kulinarik & Nachtleben in Athen</h2>
+            <p class="mb-4 section-intro-text">Entdecken Sie die vielfältigen Geschmäcker Athens, von traditionellen Spezialitäten und Streetfood bis hin zu einer blühenden veganen Szene. Am Abend laden zahlreiche authentische Bars und Weinstuben zum Verweilen ein.</p>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card">
+                    <h3>Kulinarische Spezialitäten</h3>
+                    <p class="mb-3 section-intro-text">Diese Gerichte müssen Sie in Athen unbedingt probieren, um die authentische griechische Küche zu erleben.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://de.wikipedia.org/wiki/Gyros" target="_blank"><strong>Gyros</strong></a> und <a href="https://de.wikipedia.org/wiki/Souvlaki" target="_blank"><strong>Souvlaki:</strong></a> Die bekanntesten griechischen Streetfood-Gerichte. Probieren bei <a href="https://www.google.com/maps/place/O+Thanasis" target="_blank"><strong>O Thanasis</strong></a> (Monastiraki).</li>
+                        <li>Wurst- und Wurstwaren (<a href="https://de.wikipedia.org/wiki/Pastirma" target="_blank"><strong>Pastirma</strong></a>, <a href="https://de.wikipedia.org/wiki/Sujuk" target="_blank"><strong>Sudjuk</strong></a>, <a href="https://de.wikipedia.org/wiki/Kavurma" target="_blank"><strong>Kavurma</strong></a>): Einzigartiges Erlebnis bei <a href="https://www.google.com/maps/place/Karamanlidika+tou+Fani" target="_blank"><strong>Ta Karamanlidika Tou Fani</strong></a> (Psirri/Omonoia).</li>
+                        <li><a href="https://de.wikipedia.org/wiki/Moussaka" target="_blank"><strong>Moussaka</strong></a> und <a href="https://de.wikipedia.org/wiki/Lammfleisch" target="_blank"><strong>Lamm:</strong></a> Klassische griechische Gerichte. Traditionell bei <a href="https://www.google.com/maps/place/Geros+tou+Moria" target="_blank"><strong>Geros Tou Moria</strong></a> (Plaka).</li>
+                        <li><a href="https://de.wikipedia.org/wiki/Loukoumades" target="_blank"><strong>Loukoumades:</strong></a> Süße, frittierte Teigbällchen mit Honig.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Vegane Optionen</h3>
+                    <p class="mb-3 section-intro-text">Athen bietet eine wachsende und vielfältige Auswahl an veganen Restaurants.</p>
+                     <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Vegan+Beat" target="_blank"><strong>Vegan Beat</strong></a> (Monastiraki): Griechisch & Street Food inspiriert, Moussaka, Gyros.</li>
+                        <li><a href="https://www.google.com/maps/place/Avocado" target="_blank"><strong>Avocado</strong></a> (Syntagma): "Food for Life" Philosophie, große Auswahl an pflanzlichen Gerichten.</li>
+                    </ul>
+                </div>
+                 <div class="card">
+                    <h3>Wein in Athen</h3>
+                    <p class="mb-3 section-intro-text">Entdecken Sie die besten Adressen, um griechische Weine zu probieren und zu genießen.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Cinque+Wine+%26+Deli" target="_blank"><strong>Cinque Wine & Deli:</strong></a> Top-Adresse für Weinliebhaber, griechische Rebsorten, Weinproben.</li>
+                        <li><a href="https://www.google.com/maps/place/Oinoscent" target="_blank"><strong>Oinoscent:</strong></a> Bistro mit umfangreicher Weinkarte.</li>
+                        <li><a href="https://www.google.com/maps/place/Cellier" target="_blank"><strong>Cellier:</strong></a> Alteingesessene Weinhandlung mit großer Auswahl.</li>
+                        <li><a href="https://www.google.com/maps/place/Aleria+Restaurant" target="_blank"><strong>Aleria Restaurant:</strong></a> Gehoben, mit exzellenter Weinkarte.</li>
+                        <li><a href="https://www.google.com/maps/place/Athens+Uncorked" target="_blank"><strong>Athens Uncorked:</strong></a> Speakeasy-Lounge mit internationaler Auswahl.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3 class="mt-6">Authentische Bars (Keine Touristenfallen)</h3>
+            <p class="mb-3 section-intro-text">Erleben Sie das lebendige Athener Nachtleben in Bars, die bei Einheimischen beliebt sind.</p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card"><a href="https://www.google.com/maps/place/Baba+Au+Rum" target="_blank"><strong>Baba Au Rum</strong></a> (Monastiraki): Cocktail-Pionier, Rum-Spezialist.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/six+d.o.g.s." target="_blank"><strong>six d.o.g.s.</strong></a> (Monastiraki): Kulturzentrum mit Bar, Club, Garten.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Juan+Rodriguez+Bar" target="_blank"><strong>Juan Rodriguez Bar</strong></a> (Psirri): Ganztägig, Craft-Cocktails, lateinamerikanisches Flair.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Blue+Bird+Bar" target="_blank"><strong>Blue Bird</strong></a> (Historisches Zentrum): Beliebt bei Einheimischen, Whiskey-Auswahl.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/The+Village+Jazz+Club" target="_blank"><strong>"Village"</strong></a> (Kypseli): Entspannte Jazzbar-Atmosphäre.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Naif" target="_blank"><strong>Naif</strong></a> (Neos Kosmos): Kosmopolitisches All-Day-Lokal.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Lot+51" target="_blank"><strong>Lot 51</strong></a> (Ilissia): "Destination Bar" abseits der Touristenpfade.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Rudu+Bar" target="_blank"><strong>Rudu Bar</strong></a> (Petralona): Groovige Café-Bar mit kreativen Cocktails.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Tiki+Bar+Athens" target="_blank"><strong>Tiki Bar Athens</strong></a> (Koukaki): Tropisches Flair, exotische Cocktails.</div>
+                <div class="card"><a href="https://www.google.com/maps/place/Gypsy+Jungle" target="_blank"><strong>Gypsy Jungle</strong></a> (Monastiraki): Boho-Vibes, versteckte Oase.</div>
+            </div>
+        </div>
+
+        <div id="orakel" class="tab-content">
+            <h2>Ihr Athen-Orakel 🔮</h2>
+            <p class="mb-3 section-intro-text">Stellen Sie dem Orakel eine Frage zur Geschichte, Mythologie oder Kultur Athens und erhalten Sie eine Antwort! Das Orakel wird Ihnen prägnant und informativ antworten.</p>
+            <textarea id="oracleQuestion" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73E8] mb-3" rows="6" placeholder="Z.B. 'Wer war Perikles und welche Bedeutung hatte er für Athen?' oder 'Erzähle mir etwas über die griechischen Götter des Olymps.'"></textarea>
+            <button id="askOracleButton" class="bg-[#0A4B7D] hover:bg-[#1A73E8] text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                Fragen Sie das Orakel 🔮
+            </button>
+            <div id="oracleResponse" class="llm-response mt-4 hidden">
+                <div class="loading-spinner"></div> Antwort wird geladen...
+            </div>
+        </div>
+
+        <div id="shopping" class="tab-content">
+            <h2>Shopping in Athen 🛍️</h2>
+            <p class="mb-4 section-intro-text">Athen bietet eine vielfältige Shopping-Landschaft, von internationalen Marken bis hin zu traditionellen Märkten und einzigartigen Boutiquen.</p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3>Die besten Shopping-Straßen</h3>
+                    <p class="mb-3 section-intro-text">Hier finden Sie die Hauptstraßen für Mode, Schmuck und Souvenirs.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Ermou+Street" target="_blank"><strong>Ermou-Straße:</strong></a> Die bekannteste Einkaufsstraße Athens, die vom Syntagma-Platz bis zum Monastiraki-Platz reicht. Hier finden Sie internationale Modeketten, Schuhe und Accessoires.</li>
+                        <li><a href="https://www.google.com/maps/place/Voukourestiou+Street" target="_blank"><strong>Voukourestiou-Straße:</strong></a> Die Luxus-Einkaufsstraße Athens, bekannt für High-End-Boutiquen, Schmuckgeschäfte und Designerläden.</li>
+                        <li><a href="https://www.google.com/maps/place/Pandrossou+Street" target="_blank"><strong>Pandrossou-Straße (Plaka):</strong></a> Ideal für Souvenirs, Kunsthandwerk, Lederwaren und traditionelle griechische Produkte.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>Märkte & Spezialitäten</h3>
+                    <p class="mb-3 section-intro-text">Entdecken Sie lokale Produkte und einzigartige Fundstücke auf den Märkten Athens.</p>
+                    <ul class="space-y-2 ml-4">
+                        <li><a href="https://www.google.com/maps/place/Varvakeios+Central+Market" target="_blank"><strong>Varvakeios Zentralmarkt:</strong></a> Der größte und älteste Lebensmittelmarkt Athens, ideal für frische Produkte, Fleisch, Fisch, Gewürze und lokale Delikatessen. Ein echtes Erlebnis für die Sinne.</li>
+                        <li><a href="https://www.google.com/maps/place/Monastiraki+Flea+Market" target="_blank"><strong>Monastiraki Flohmarkt:</strong></a> Jeden Sonntag findet hier ein lebhafter Flohmarkt statt, auf dem Sie Antiquitäten, Vintage-Kleidung, Schallplatten und allerlei Kuriositäten finden können.</li>
+                        <li><strong>Griechische Produkte:</strong> Achten Sie auf lokale Olivenöle, Honig, Kräuter, Mastix-Produkte (von der Insel Chios) und handgemachten Schmuck.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-stone-300 p-6 mt-10 text-center">
+        <p>© 2025 Geiá sou Athen. Gute Reise!</p>
+    </footer>
+
+    <script>
+        const tabs = document.querySelectorAll('.tab-content');
+        const navButtons = document.querySelectorAll('.nav-button');
+
+        function openTab(tabId) {
+            tabs.forEach(tab => {
+                if (tab.id === tabId) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            navButtons.forEach(button => {
+                if (button.getAttribute('onclick').includes(tabId)) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const weatherCtx = document.getElementById('weatherChart').getContext('2d');
+        const weatherChart = new Chart(weatherCtx, {
+            type: 'bar',
+            data: {
+                labels: ['29. Mai (Do)', '30. Mai (Fr)', '31. Mai (Sa)', '1. Juni (So)'],
+                datasets: [{
+                    label: 'Höchsttemperatur (°C)',
+                    data: [26.7, 23.9, 23.9, 26.7],
+                    backgroundColor: 'rgba(255, 159, 64, 0.8)', /* Gold */
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Tiefsttemperatur (°C)',
+                    data: [15, 16.7, 17.8, 16.1],
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)', /* Blue */
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Temperatur (°C)' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y + '°C';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Gemini API Integration - Athen-Orakel
+        const oracleQuestionInput = document.getElementById('oracleQuestion');
+        const askOracleButton = document.getElementById('askOracleButton');
+        const oracleResponseDiv = document.getElementById('oracleResponse');
+
+        askOracleButton.addEventListener('click', async () => {
+            const prompt = oracleQuestionInput.value.trim();
+            if (!prompt) {
+                oracleResponseDiv.innerHTML = '<p class="text-red-600">Bitte geben Sie eine Frage ein.</p>';
+                oracleResponseDiv.classList.remove('hidden');
+                return;
+            }
+
+            oracleResponseDiv.innerHTML = '<div class="loading-spinner"></div> Antwort wird geladen...';
+            oracleResponseDiv.classList.remove('hidden');
+
+            try {
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: `Antworte prägnant und informativ auf Deutsch auf die folgende Frage zu Athen, seiner Geschichte, Mythologie oder Kultur: ${prompt}` }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    oracleResponseDiv.innerHTML = `<p>${text}</p>`;
+                } else {
+                    oracleResponseDiv.innerHTML = '<p class="text-red-600">Entschuldigung, ich konnte keine Antwort finden. Bitte versuchen Sie es erneut.</p>';
+                }
+            } catch (error) {
+                console.error('Fehler beim Abrufen der Orakel-Antwort:', error);
+                oracleResponseDiv.innerHTML = '<p class="text-red-600">Ein Fehler ist aufgetreten. Bitte überprüfen Sie Ihre Internetverbindung oder versuchen Sie es später erneut.</p>';
+            }
+        });
+
+        // Flight Status Logic
+        const flightNumberInput = document.getElementById('flightNumberInput');
+        const checkFlightStatusButton = document.getElementById('checkFlightStatusButton');
+        const flightStatusResponseDiv = document.getElementById('flightStatusResponse');
+
+        checkFlightStatusButton.addEventListener('click', async () => {
+            const flightNumber = flightNumberInput.value.trim().toUpperCase();
+            if (!flightNumber) {
+                flightStatusResponseDiv.innerHTML = '<p class="text-red-600">Bitte geben Sie eine Flugnummer ein.</p>';
+                flightStatusResponseDiv.classList.remove('hidden');
+                return;
+            }
+
+            flightStatusResponseDiv.innerHTML = '<div class="loading-spinner"></div> Status wird geladen...';
+            flightStatusResponseDiv.classList.remove('hidden');
+
+            // Simulate API call for flight status
+            // In a real application, you would make a server-side call to a flight tracking API (e.g., FlightAware, FlightStats, or Google Flights API if available for public use)
+            // This client-side JavaScript cannot directly query Google Flights due to CORS policies and API key security.
+            setTimeout(() => {
+                let statusText = '';
+                if (flightNumber === 'A3861') {
+                    statusText = 'Ihr Hinflug A3861 (Aegean Air): Planmäßig, voraussichtliche Ankunft in Athen 14:00 Uhr. (Simuliert)';
+                } else if (flightNumber === 'LH1234') { // Example for a known return flight
+                    statusText = 'Ihr Rückflug LH1234: Planmäßig, voraussichtliche Abflugzeit 18:30 Uhr. (Simuliert)';
+                } else if (flightNumber === 'OS567') { // Another example
+                    statusText = 'Flug OS567: Verspätet, neue Abflugzeit 20:00 Uhr. Grund: Technische Überprüfung. (Simuliert)';
+                } else {
+                    statusText = `Flug ${flightNumber}: Status unbekannt oder nicht gefunden. Bitte überprüfen Sie die Nummer. (Simuliert)`;
+                }
+                flightStatusResponseDiv.innerHTML = `<p>${statusText}</p>`;
+            }, 1500); // Simulate network delay
+        });
+    </script>
+</body>
+</html>
